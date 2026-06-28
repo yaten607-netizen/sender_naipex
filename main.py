@@ -1,27 +1,46 @@
 import asyncio
+import os
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import CommandStart
-from aiogram.utils.keyboard import ReplyKeyboardBuilder
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
+from aiogram.fsm.storage.memory import MemoryStorage
+from aiogram.utils.keyboard import ReplyKeyboardBuilder, InlineKeyboardBuilder
 
+from pyrogram import Client
+from pyrogram.errors import SessionPasswordNeeded, PhoneCodeInvalid, PhoneCodeExpired
+
+# Токены и доступы
 BOT_TOKEN = "8973718655:AAEJLZCO4z1SIRnBAiudnZ8EZrj5D-D8SqI"
+API_ID = 38973104
+API_HASH = "2edbb6059c7cba62860eb638e0508793"
 
 bot = Bot(token=BOT_TOKEN)
-dp = Dispatcher()
+# Используем MemoryStorage для хранения состояний (номеров/кодов) в памяти
+dp = Dispatcher(storage=MemoryStorage())
 
-# --- КЛАВИАТУРЫ (Кнопки внизу экрана, как на image_18aca4.png) ---
+# Временное хранилище запущенных клиентов Pyrogram, чтобы передавать их между шагами
+active_clients = {}
 
-# Выбор языка (Reply-кнопки внизу)
+# Описываем состояния для пошагового ввода данных
+class AddAccountState(StatesGroup):
+    waiting_for_phone = State()
+    waiting_for_code = State()
+    waiting_for_password = State()
+
+# --- КЛАВИАТУРЫ ---
+
+# 1. Выбор языка
 def get_language_keyboard():
     builder = ReplyKeyboardBuilder()
     builder.add(types.KeyboardButton(text="🇷🇺 Русский"))
     builder.add(types.KeyboardButton(text="🇬🇧 English"))
-    builder.adjust(1) # Кнопки будут одна под другой
+    builder.adjust(1)
     return builder.as_markup(resize_keyboard=True, one_time_keyboard=True)
 
-# Главное меню (в два столбца, как на скриншоте)
+# 2. Главное меню
 def get_main_menu(lang: str):
     builder = ReplyKeyboardBuilder()
-    
     if lang == "rus":
         builder.add(types.KeyboardButton(text="🚀 Авто рассылка"))
         builder.add(types.KeyboardButton(text="📝 Текст сообщения"))
@@ -40,14 +59,19 @@ def get_main_menu(lang: str):
         builder.add(types.KeyboardButton(text="👑 Pro Tariff"))
         builder.add(types.KeyboardButton(text="🆔 Cabinet"))
         builder.add(types.KeyboardButton(text="⚙️ Settings"))
-        
-    builder.adjust(2) # Строго по 2 кнопки в ряд, как на фото
+    builder.adjust(2)
     return builder.as_markup(resize_keyboard=True)
+
+# 3. Инлайн-кнопка для добавления аккаунта в разделе Профили
+def get_profiles_inline():
+    builder = InlineKeyboardBuilder()
+    builder.add(types.InlineKeyboardButton(text="➕ Добавить аккаунт", callback_data="add_tg_account"))
+    return builder.as_markup()
 
 
 # --- ХЭНДЛЕРЫ ---
 
-# Старт бота (Русский язык сверху, Английский снизу)
+# Старт бота
 @dp.message(CommandStart())
 async def cmd_start(message: types.Message):
     await message.answer(
@@ -62,38 +86,27 @@ async def cmd_start(message: types.Message):
         parse_mode="Markdown"
     )
 
-# Обработка нажатия на кнопку "Русский"
+# Выбор языка
 @dp.message(F.text == "🇷🇺 Русский")
 async def process_rus_lang(message: types.Message):
-    await message.answer(
-        "🤖 **Главное меню ApexSend**\n\n"
-        "Платформа успешно запущена и готова к работе. Выберите нужное действие на панели внизу:",
-        reply_markup=get_main_menu("rus"),
-        parse_mode="Markdown"
-    )
+    await message.answer("🤖 **Главное меню ApexSend**\n\nВыберите нужное действие на панели ниже:", reply_markup=get_main_menu("rus"), parse_mode="Markdown")
 
-# Обработка нажатия на кнопку "English"
 @dp.message(F.text == "🇬🇧 English")
 async def process_eng_lang(message: types.Message):
+    await message.answer("🤖 **ApexSend Main Menu**\n\nChoose an action on the panel below:", reply_markup=get_main_menu("eng"), parse_mode="Markdown")
+
+# Нажатие на кнопку "👤 Профили" или "👤 Profiles"
+@dp.message(F.text.in_(["👤 Профили", "👤 Profiles"]))
+async def process_profiles_menu(message: types.Message):
     await message.answer(
-        "🤖 **ApexSend Main Menu**\n\n"
-        "The platform is successfully launched and ready. Choose an action on the panel below:",
-        reply_markup=get_main_menu("eng"),
+        "🗂 **Управление рабочими аккаунтами**\n\n"
+        "Здесь отображаются добавленные профили, с которых будет идти рассылка.\n"
+        "Чтобы привязать новый аккаунт, нажмите на кнопку ниже:",
+        reply_markup=get_profiles_inline(),
         parse_mode="Markdown"
     )
 
-# Отлов всех остальных кнопок меню, чтобы бот реагировал текстом
-@dp.message()
-async def process_menu_clicks(message: types.Message):
-    # Если это не старт и не выбор языка, выдаем уведомление
-    if message.text not in ["/start", "🇷🇺 Русский", "🇬🇧 English"]:
-        await message.answer("Эта функция сейчас находится в процессе разработки! 😉")
-
-
-# --- ЗАПУСК ---
-async def main():
-    print("[+] Панель управления ApexSend успешно запущена на Railway!")
-    await dp.start_polling(bot)
-
-if __name__ == "__main__":
-    asyncio.run(main())
+# Клик по инлайн-кнопке "Добавить аккаунт" -> Переход в FSM состояние
+@dp.callback_query(F.data == "add_tg_account")
+async def start_add_account(callback: types.CallbackQuery, state: FSMContext):
+    await callback.message

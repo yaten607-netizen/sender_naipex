@@ -1,113 +1,98 @@
 import asyncio
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import CommandStart
-from aiogram.utils.keyboard import InlineKeyboardBuilder
+from aiogram.utils.keyboard import ReplyKeyboardBuilder
 
-# Твой токен вшит напрямую для удобства запуска на хостинге
 BOT_TOKEN = "8973718655:AAEJLZCO4z1SIRnBAiudnZ8EZrj5D-D8SqI"
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
-# --- КЛАВИАТУРЫ ---
+# --- КЛАВИАТУРЫ (Кнопки внизу экрана, как на image_18aca4.png) ---
 
-# 1. Выбор языка при старте
+# Выбор языка (Reply-кнопки внизу)
 def get_language_keyboard():
-    builder = InlineKeyboardBuilder()
-    builder.add(types.InlineKeyboardButton(text="🇺🇦 Українська", callback_data="lang_ukr"))
-    builder.add(types.InlineKeyboardButton(text="🇷🇺 Русский", callback_data="lang_rus"))
-    builder.add(types.InlineKeyboardButton(text="🇬🇧 English", callback_data="lang_eng"))
-    builder.add(types.InlineKeyboardButton(text="🇨🇳 中文", callback_data="lang_chn"))
-    builder.adjust(2)
-    return builder.as_markup()
+    builder = ReplyKeyboardBuilder()
+    builder.add(types.KeyboardButton(text="🇷🇺 Русский"))
+    builder.add(types.KeyboardButton(text="🇬🇧 English"))
+    builder.adjust(1) # Кнопки будут одна под другой
+    return builder.as_markup(resize_keyboard=True, one_time_keyboard=True)
 
-# 2. Главное меню (генерируется в зависимости от выбранного языка)
+# Главное меню (в два столбца, как на скриншоте)
 def get_main_menu(lang: str):
-    builder = InlineKeyboardBuilder()
+    builder = ReplyKeyboardBuilder()
     
-    if lang == "ukr":
-        builder.add(types.InlineKeyboardButton(text="👥 Керування акаунтами", callback_data="menu_accounts"))
-        builder.add(types.InlineKeyboardButton(text="✉️ Створити розсилку", callback_data="menu_start_spam"))
-        builder.add(types.InlineKeyboardButton(text="⚙️ Налаштування", callback_data="menu_settings"))
-        builder.add(types.InlineKeyboardButton(text="🌐 Змінити мову", callback_data="menu_change_lang"))
-    elif lang == "rus":
-        builder.add(types.InlineKeyboardButton(text="👥 Управление аккаунтами", callback_data="menu_accounts"))
-        builder.add(types.InlineKeyboardButton(text="✉️ Создать рассылку", callback_data="menu_start_spam"))
-        builder.add(types.InlineKeyboardButton(text="⚙️ Настройки", callback_data="menu_settings"))
-        builder.add(types.InlineKeyboardButton(text="🌐 Изменить язык", callback_data="menu_change_lang"))
+    if lang == "rus":
+        builder.add(types.KeyboardButton(text="🚀 Авто рассылка"))
+        builder.add(types.KeyboardButton(text="📝 Текст сообщения"))
+        builder.add(types.KeyboardButton(text="⏱ Интервал"))
+        builder.add(types.KeyboardButton(text="💬 Настройка групп"))
+        builder.add(types.KeyboardButton(text="👤 Профили"))
+        builder.add(types.KeyboardButton(text="👑 Про тариф"))
+        builder.add(types.KeyboardButton(text="🆔 Кабинет"))
+        builder.add(types.KeyboardButton(text="⚙️ Настройки"))
     else:
-        builder.add(types.InlineKeyboardButton(text="👥 Manage Accounts", callback_data="menu_accounts"))
-        builder.add(types.InlineKeyboardButton(text="✉️ New Campaign", callback_data="menu_start_spam"))
-        builder.add(types.InlineKeyboardButton(text="⚙️ Settings", callback_data="menu_settings"))
-        builder.add(types.InlineKeyboardButton(text="🌐 Change Language", callback_data="menu_change_lang"))
+        builder.add(types.KeyboardButton(text="🚀 Auto Spammer"))
+        builder.add(types.KeyboardButton(text="📝 Message Text"))
+        builder.add(types.KeyboardButton(text="⏱ Delay/Interval"))
+        builder.add(types.KeyboardButton(text="💬 Group Settings"))
+        builder.add(types.KeyboardButton(text="👤 Profiles"))
+        builder.add(types.KeyboardButton(text="👑 Pro Tariff"))
+        builder.add(types.KeyboardButton(text="🆔 Cabinet"))
+        builder.add(types.KeyboardButton(text="⚙️ Settings"))
         
-    builder.adjust(1)
-    return builder.as_markup()
+    builder.adjust(2) # Строго по 2 кнопки в ряд, как на фото
+    return builder.as_markup(resize_keyboard=True)
 
 
 # --- ХЭНДЛЕРЫ ---
 
-# Стартовая команда (исправленная разметка Markdown)
+# Старт бота (Русский язык сверху, Английский снизу)
 @dp.message(CommandStart())
 async def cmd_start(message: types.Message):
     await message.answer(
-        "🚀 **Welcome to ApexSend!**\n"
-        "The ultimate multi-language platform for automated Telegram outreach and traffic growth.\n\n"
-        "Please choose your language below to access the control panel:\n"
-        "-------------------------------------\n"
         "🚀 **Добро пожаловать в ApexSend!**\n"
         "Прогрессивная мультиязычная платформа для автоматизации рассылок и масштабирования трафика.\n\n"
-        "Пожалуйста, выберите язык ниже для доступа к панели управления:",
+        "Пожалуйста, выберите язык ниже на кнопках:\n"
+        "-------------------------------------\n"
+        "🚀 **Welcome to ApexSend!**\n"
+        "The ultimate multi-language platform for automated Telegram outreach and traffic growth.\n\n"
+        "Please choose your language using the buttons below:",
         reply_markup=get_language_keyboard(),
         parse_mode="Markdown"
     )
 
-# Обработка выбора языка и показ Главного Меню
-@dp.callback_query(F.data.startswith("lang_"))
-async def process_language_select(callback: types.CallbackQuery):
-    lang = callback.data.split("_")[1]
-    
-    if lang == "ukr":
-        text = (
-            "🤖 **Головне меню ApexSend**\n\n"
-            "Платформа готова до роботи. Оберіть потрібну дію на кнопках нижче:"
-        )
-    elif lang == "rus":
-        text = (
-            "🤖 **Главное меню ApexSend**\n\n"
-            "Платформа готова к работе. Выберите нужное действие на кнопках ниже:"
-        )
-    else:
-        text = (
-            "🤖 **ApexSend Main Menu**\n\n"
-            "The platform is ready. Choose an action using the buttons below:"
-        )
-        
-    await callback.message.edit_text(
-        text=text,
-        reply_markup=get_main_menu(lang),
+# Обработка нажатия на кнопку "Русский"
+@dp.message(F.text == "🇷🇺 Русский")
+async def process_rus_lang(message: types.Message):
+    await message.answer(
+        "🤖 **Главное меню ApexSend**\n\n"
+        "Платформа успешно запущена и готова к работе. Выберите нужное действие на панели внизу:",
+        reply_markup=get_main_menu("rus"),
         parse_mode="Markdown"
     )
-    await callback.answer()
 
-# Возврат к выбору языка из меню
-@dp.callback_query(F.data == "menu_change_lang")
-async def process_change_lang(callback: types.CallbackQuery):
-    await callback.message.edit_text(
-        "🚀 Выберите язык / Оберіть мову / Choose language:",
-        reply_markup=get_language_keyboard()
+# Обработка нажатия на кнопку "English"
+@dp.message(F.text == "🇬🇧 English")
+async def process_eng_lang(message: types.Message):
+    await message.answer(
+        "🤖 **ApexSend Main Menu**\n\n"
+        "The platform is successfully launched and ready. Choose an action on the panel below:",
+        reply_markup=get_main_menu("eng"),
+        parse_mode="Markdown"
     )
-    await callback.answer()
 
-# Заглушки для остальных кнопок меню
-@dp.callback_query(F.data.startswith("menu_"))
-async def process_menu_buttons(callback: types.CallbackQuery):
-    await callback.answer("Эта функция сейчас разрабатывается нами! 😉", show_alert=True)
+# Отлов всех остальных кнопок меню, чтобы бот реагировал текстом
+@dp.message()
+async def process_menu_clicks(message: types.Message):
+    # Если это не старт и не выбор языка, выдаем уведомление
+    if message.text not in ["/start", "🇷🇺 Русский", "🇬🇧 English"]:
+        await message.answer("Эта функция сейчас находится в процессе разработки! 😉")
 
 
 # --- ЗАПУСК ---
 async def main():
-    print("[+] Панель управления ApexSend успешно запущена!")
+    print("[+] Панель управления ApexSend успешно запущена на Railway!")
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
